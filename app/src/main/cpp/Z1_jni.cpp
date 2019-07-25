@@ -5,12 +5,12 @@
 #include <fstream>
 #include <opencv2/opencv.hpp>
 #include <android/bitmap.h>
+#include "counter.hpp"
 #ifdef __cplusplus
 extern "C"{
 #else;
 #endif
 
-/*fill bitmap with rgba8888*/
 /*fill bitmap with rgba8888*/
 static void fill_bitmap(AndroidBitmapInfo*  info, void *pixels, uint32_t * pdata,int pdataStride)
 {
@@ -77,6 +77,7 @@ Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz, jobject
 JNIEXPORT jstring JNICALL
 Java_com_marvoto_fat_MeasureDepth_TestString(JNIEnv* env, jobject /* this */) {
     std::string hello = "Hello from C++";
+    measure();
     return env->NewStringUTF(hello.c_str());
 }
 JNIEXPORT int JNICALL
@@ -87,6 +88,18 @@ Java_com_marvoto_fat_MeasureDepth_SaveBmp(JNIEnv* env, jobject thiz, jbyteArray 
     jbyte* img = NULL;
     const char*  pdir = env->GetStringUTFChars(_pdir,0);
 
+#if 1
+    unsigned char Buf[120];
+    ifstream fp("/sdcard/1/2.txt", ios::in|ios::binary);
+    if(fp.bad())
+    {
+        LOGE("read 1.txt: open failed\n");
+        return NULL;
+    }
+   fp.read((char*)Buf, 120);
+   fp.close();
+   LOG("read 1.txt ok,%s",Buf);
+#endif
 
     int length = env->GetArrayLength(buffer);
     img = env->GetByteArrayElements(buffer,NULL);

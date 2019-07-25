@@ -1,7 +1,10 @@
 package marvoto.com.z1;
 
+import android.Manifest;
 import android.app.Notification;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -20,6 +23,11 @@ import android.widget.Toast;
 import android.util.Log;
 import android.graphics.Bitmap;
 import com.marvoto.fat.MeasureDepth;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -53,7 +61,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         findViewById(R.id.btnStart).setOnClickListener(this);
         findViewById(R.id.btnStop).setOnClickListener(this);
         setSupportActionBar(toolbar);
-
+        isPermissionsAllGranted(107);
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -72,7 +80,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             for ( int j = 0; j < 640; j++) {
                 data[i * 640 + j] = val;
             }
-        // measureTest.SaveBmp(data,640,480, "/sdcard/1/test.bmp");
+
 
         Thread mRefreshThread = new Thread() {
             @Override
@@ -107,8 +115,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         switch (view.getId()) {
             case R.id.btnStart:
-                g_status = 1;
+                //g_status = 1;
                 Log.i(tag, "btnStart");
+//                byte[] data2 = new byte[640 * 480];
+//                byte val = 120;
+//                for ( int i = 0; i < 480; i++)
+//                    for ( int j = 0; j < 640; j++) {
+//                        data2[i * 640 + j] = val;
+//                    }
+                //MeasureDepth.SaveBmp(data2,640,480, "/sdcard/1/test.bmp");
+                MeasureDepth.TestString();
                 break;
             case R.id.btnStop:
                 g_status = 0;
@@ -141,9 +157,99 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
 
-    /**
-     * A native method that is implemented by the 'native-lib' native library,
-     * which is packaged with this application.
-     */
+
+    //权限查询
+    private String[] permissions = new String[]{
+            //Manifest.permission.ACCESS_COARSE_LOCATION,//要得到wifi搜索列表，就必须要此权限，android6.0
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.CHANGE_WIFI_STATE,
+            Manifest.permission.ACCESS_WIFI_STATE,
+            //Manifest.permission.CAMERA,
+            //Manifest.permission.READ_PHONE_STATE,
+            //Manifest.permission.CALL_PHONE,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.INTERNET,
+            Manifest.permission.ACCESS_LOCATION_EXTRA_COMMANDS,
+            //Manifest.permission.BLUETOOTH_ADMIN,
+            //Manifest.permission.BLUETOOTH,
+            Manifest.permission.ACCESS_NETWORK_STATE,
+            //Manifest.permission.WAKE_LOCK,
+            Manifest.permission.CHANGE_NETWORK_STATE
+            //  Manifest.permission.VIBRATE,
+            //  Manifest.permission.GET_ACCOUNTS,
+            //   Manifest.permission.RECORD_AUDIO
+    };
+
+
+    //检查权限
+    private boolean isPermissionsAllGranted(int questCode) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
+        }
+        //获得批量请求但被禁止的权限列表
+        List<String> deniedPerms = new ArrayList<String>();
+        for (int i = 0; permissions != null && i < permissions.length; i++) {
+            if (PackageManager.PERMISSION_GRANTED != checkSelfPermission(permissions[i])) {
+                deniedPerms.add(permissions[i]);
+            }
+        }
+        //进行批量请求
+        int denyPermNum = deniedPerms.size();
+        if (denyPermNum != 0) {
+            requestPermissions(deniedPerms.toArray(new String[denyPermNum]), questCode);
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (grantResults.length == 0) {
+            return;
+        }
+        if (requestCode == 107) {
+            doPermissionAll(grantResults);
+        }
+    }
+
+    private void doPermissionAll(int[] grantResults) {
+        int grantedPermNum = 0;
+        int totalPermissons = permissions.length;
+        int totalResults = grantResults.length;
+        if (totalPermissons == 0 || totalResults == 0) {
+            return;
+        }
+        Map<String, Integer> permResults = new HashMap<>();
+        //初始化Map容器，用于判断哪些权限被授予
+        for (String perm : permissions) {
+            permResults.put(perm, PackageManager.PERMISSION_DENIED);
+        }
+        //根据授权的数目和请求授权的数目是否相等来判断是否全部授予权限
+        for (int i = 0; i < totalResults; i++) {
+            permResults.put(permissions[i], grantResults[i]);
+            if (permResults.get(permissions[i]) == PackageManager.PERMISSION_GRANTED) {
+                grantedPermNum++;
+            }
+            Log.d("Debug", "权限：" + permissions[i] + "-->" + grantResults[i]);
+        }
+        if (grantedPermNum == totalResults) {
+            //用于授予全部权限
+            Toast.makeText(MainActivity.this, "权限申请成功", Toast.LENGTH_SHORT).show();
+            /*if (click==1){
+                if (SPUtil.getBoolean(SelectLoginActivity.this, OtherFinals.IS_PHONE_LOGIN, true)) {
+                    startActivity(new Intent(SelectLoginActivity.this, LoginPhoneActivity.class));
+                } else {
+                    startActivity(new Intent(SelectLoginActivity.this, LoginEmailActivity.class));
+                }
+            }else if (click==2){
+                startActivity(new Intent(SelectLoginActivity.this, CameraActivity.class));
+            }*/
+        } else {
+            Toast.makeText(MainActivity.this, "请在应用管理中给予此应用存储和获取位置的权限", Toast.LENGTH_SHORT).show();
+            //isPermission=false;
+        }
+    }
+
 
 }
