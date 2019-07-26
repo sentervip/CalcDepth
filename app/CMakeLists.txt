@@ -30,7 +30,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             src/main/cpp/Z1_jni.cpp
+        src/main/cpp/api_jni.cpp
              src/main/cpp/counter.cpp
              )
 

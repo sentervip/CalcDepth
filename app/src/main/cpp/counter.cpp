@@ -104,7 +104,7 @@ int CalcDist( vector<strAreaTag> * pData, int w, int h)
 	unsigned long int sum= 0;
 	int i = 0,j = 0,pos =0,tmp=w;
 
-
+	LOG("");
 	//s1 find 最外围中心点，以mc(Xc,Yc).Xc为定点，取Y最小值
 	for( vector<Point>::iterator it = g_Contours.at(pData->at(0).index).begin(); 
 		 it != g_Contours.at(pData->at(0).index).end();it++){
@@ -113,7 +113,7 @@ int CalcDist( vector<strAreaTag> * pData, int w, int h)
 			if((*it).y < tmp){
 				pos = i;
 			    tmp = (*it).y;
-				printf("find mc[%d]:%d,%d\n",pos,(*it).x, (*it).y );
+				LOG("find mc[%d]:%d,%d\n",pos,(*it).x, (*it).y );
 			}
 		}
 		i++;
@@ -164,8 +164,7 @@ int measure(void)
     
     int width = img.cols;
     int height = img.rows;
-   // Mat gray = Mat::zeros(img.size(),CV_8UC1);
-    Mat gray = Mat::zeros(640,480,CV_8UC1);
+    Mat gray = Mat::zeros(img.size(),CV_8UC1);
     for (int i = 0; i < height; i++)
     {
         for (int j = 0; j < width; j++)
@@ -230,7 +229,7 @@ int measure(void)
         if(area.d < FL_MIN_LENGTH || area.s < FL_MIN_AREA){
             continue;
         }		
-		printf("[%d], s:%d ,d:%d \n", i, (int)area.s, (int)area.d); LOGL();
+		LOG("[%d], s:%d ,d:%d \n", i, (int)area.s, (int)area.d); LOGL();
 		AreaGetMax(&area, drawing.cols, drawing.rows);  LOGL();
         iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);  LOGL();
         if(iRet > 0){
@@ -244,8 +243,9 @@ int measure(void)
         putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
         
     }
-	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);
-	CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);
+	
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);    LOGL();
+	CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);       LOGL();
 	const Point * pts[1] = {g_CandidateArea.at(0).AverPoint};
 	cv::fillPoly(drawing,pts, &g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0)); 
 	char dist[40];
@@ -263,8 +263,8 @@ int measure(void)
 	cv::putText(drawing,"Candidate area",Point2f(width-160,20),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0xff, 0xff));
 
 	cv::rectangle(drawing,Point(width-200,25),Point(width-170,40),Scalar(0, 0, 0xff),2);
-	cv::putText(drawing,"Dest area",Point2f(width-160,40),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0, 0xff));
-    imwrite( "/sdcard/1/measure.jpg", drawing );
+	cv::putText(drawing,"Dest area",Point2f(width-160,40),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0, 0xff));   LOGL();
+    imwrite( "/sdcard/1/measure.jpg", drawing );   LOGL();
 	//waitKey();
     return 0;
 }

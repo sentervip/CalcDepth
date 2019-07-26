@@ -1,7 +1,7 @@
 #include <jni.h>
 #include <string>
 #include "config_macro.h"
-#include "Z1_jni.hpp"
+#include "api_jni.hpp"
 #include <fstream>
 #include <opencv2/opencv.hpp>
 #include <android/bitmap.h>
@@ -22,7 +22,7 @@ static void fill_bitmap(AndroidBitmapInfo*  info, void *pixels, uint32_t * pdata
     {
         for (int j = 0; j < info->width; j++)
         {
-            pDst[j * 4] =     pSrc[j] >> 16 & 0xFF; //R
+            pDst[j * 4] =  pSrc[j] >> 16 & 0xFF; //R
             pDst[j * 4 + 1] = pSrc[j] >> 8 & 0xFF; //G
             pDst[j * 4 + 2] = pSrc[j] & 0xFF; //B
             pDst[j * 4 + 3] = 0xFF;  //A

@@ -35,16 +35,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Bitmap mBitmap;
     ImageView imageView;
     Button btnStart,btnStop;
+    private int depth;
     private int IMG_WIDTH = 640;
     private int IMG_HEIGHT = 480;
     private int g_status = 0;
     private static final String tag = "MAVTJ";
     private int[] data;
+
     private Handler handler = new Handler(){
+
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
             if (msg.what==0){
+                //depth = MeasureDepth.DrawBitmap((Bitmap) msg.obj,data);
+                Log.i(tag,"depth="+depth);
                 imageView.setImageBitmap((Bitmap) msg.obj);
             }
         }
@@ -93,7 +98,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
 
                 if (g_status == 1) {
-                    MeasureDepth.DrawBitmap(mBitmap,data);
+                   // MeasureDepth.DrawBitmap(mBitmap,data);
                    // int[] temp = new int[640*480];
                     //for (int i = 0; i < temp.length; i++) {
                     //    temp[i] = Color.argb(255, 1, 2, 3);
@@ -115,7 +120,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         switch (view.getId()) {
             case R.id.btnStart:
-                //g_status = 1;
+               // g_status = 1;
                 Log.i(tag, "btnStart");
 //                byte[] data2 = new byte[640 * 480];
 //                byte val = 120;
