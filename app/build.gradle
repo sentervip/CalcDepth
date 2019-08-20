@@ -1,7 +1,43 @@
 apply plugin: 'com.android.application'
-
+//apply plugin: 'com.android.model.application'
+//model{
+//    android {
+//        compileSdkVersion = 28
+//        defaultConfig {
+//            applicationId "marvoto.com.z1"
+//            minSdkVersion = 19
+//            targetSdkVersion = 28
+//            versionCode = 1
+//            versionName = "1.0"
+//            testInstrumentationRunner = "android.support.test.runner.AndroidJUnitRunner"
+//            externalNativeBuild {
+//                cmake {
+//                    cppFlags = "-std=c++11 -frtti -fexceptions"
+//                }
+//            }
+//
+//        }
+//        buildTypes {
+//            release {
+//                minifyEnabled false
+//                proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+//            }
+//        }
+//        externalNativeBuild {
+//            cmake {
+//                path "CMakeLists.txt"
+//            }
+//        }
+//    }
+//
+//}// by aizj add
 android {
     compileSdkVersion 28
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
     defaultConfig {
         applicationId "marvoto.com.z1"
         minSdkVersion 19
@@ -13,18 +49,17 @@ android {
             cmake {
                 cppFlags "-std=c++11 -frtti -fexceptions"
             }
+            ndk {
+                abiFilters 'armeabi-v7a','arm64-v8a'
+            }
         }
 
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }
-    }
-    externalNativeBuild {
-        cmake {
-            path "CMakeLists.txt"
         }
     }
 

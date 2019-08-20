@@ -21,4 +21,8 @@
 #define EOVERFLOW  (-53)
 #define EBAD_ALLOC  (-54)
 
+#define _MAX(x,y)   (x>y?x:y)
+#define _MIN(x,y)   (x>y?y:x)
+
+
 #endif

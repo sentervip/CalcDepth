@@ -26,5 +26,13 @@ public final class MeasureDepth{
      * -3     图像不清晰
      * >0     测量脂肪厚度
      */
-    public static native  int DrawBitmap(Bitmap var0, int[] var1);
+    public static native  int DrawBitmap(Bitmap var0, byte[] var1);
+
+    /**
+     * desc   Set parameter from fpga
+     * var0   Sample Rate
+     * var1   OscFre
+     * ret    no
+     */
+    public static native  int ParaSet(float SampleRate, float OscFre);
 }

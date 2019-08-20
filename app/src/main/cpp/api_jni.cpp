@@ -8,44 +8,52 @@
 #include "counter.hpp"
 #ifdef __cplusplus
 extern "C"{
-#else;
+#else
 #endif
+uint8_t  pOut[640*480*3];
 
 /*fill bitmap with rgba8888*/
-static void fill_bitmap(AndroidBitmapInfo*  info, void *pixels, uint32_t * pdata,int pdataStride)
+static void fill_bitmap(AndroidBitmapInfo*  info, void* pixels, uint8_t* pdata,int pdataStride)
 {
-    uint32_t * pSrc = pdata;
+    uint8_t * pSrc = pdata;
     uint8_t * pDst = (uint8_t *) pixels;
+    int step1,step2;
 
     //LOG("bitmap: pixel=%p, pdata=%d,stride=%d,info->width=%d,info->height=%d\n", pixels, pdata,pdataStride,info->width,info->height); 
     for (int i = 0; i < info->height; i++)
     {
         for (int j = 0; j < info->width; j++)
         {
-            pDst[j * 4] =  pSrc[j] >> 16 & 0xFF; //R
-            pDst[j * 4 + 1] = pSrc[j] >> 8 & 0xFF; //G
-            pDst[j * 4 + 2] = pSrc[j] & 0xFF; //B
-            pDst[j * 4 + 3] = 0xFF;  //A
-        }
-        pSrc += info->width;
-        pDst += info->width * 4;
+            pDst[step2] =  pSrc[step1+2]; //R
+            pDst[step2+1] = pSrc[step1+1]; //G
+            pDst[step2+ 2] =pSrc[step1]; //B
+            pDst[step2+ 3] = 0xFF;  //A
+            step1 = j*3;
+            step2 = j*4;
 
+        }
+        pSrc += info->width*3;
+        pDst += info->width*4;
     }
 }
+JNIEXPORT void JNICALL
+Java_com_marvoto_fat_MeasureDepth_ParaSet(JNIEnv * env, jobject thiz, float SampleRate, float OscFre)
+{
+    ParaSet(SampleRate,OscFre );
+}
+
 JNIEXPORT int JNICALL
-Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz, jobject bitmap, jintArray _byteArry)
+Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz,  jobject bitmap, jbyteArray _byteArry)
 {
     int iRet = 0;
     void *   pixels = NULL;
     AndroidBitmapInfo  info={0};
-    jint * pByteArry = NULL;
-    uint32_t *pOut;
+    jbyte * pByteArry = NULL;
 
     if(_byteArry == NULL){
         LOGE("BmDrawBitmap nullPtr,exit\n");
         return ENULL_PTR;
     }
-    LOGL();
     if ((iRet = AndroidBitmap_getInfo( env,bitmap, &info)) < 0) {
         LOGE("BmAndroidBitmap_getInfo() failed ! error=%d", iRet);
         return EBUSY;
@@ -56,20 +64,25 @@ Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz, jobject
     }
 
     if(pixels){
-        pByteArry = (jint*) env->GetIntArrayElements(_byteArry, 0);
-        pOut = (unsigned int*)pByteArry;
+        pByteArry = (jbyte *) env->GetByteArrayElements(_byteArry, 0);
     }
 
-    if(pOut) {
+    if(pByteArry) {
+        //memset(pOut,0, sizeof(pOut));
+        iRet = measure(info.width,info.height,(uint8_t *)pByteArry,pOut);
+        if(iRet < 0){
+            goto fail;
+        }
         fill_bitmap(&info, pixels, pOut,info.width);
         iRet = ESUCCED;
     }else{
         iRet = EFAILURE;
     }
 
+fail:
     AndroidBitmap_unlockPixels(env, bitmap);
     if(pByteArry){
-        env->ReleaseIntArrayElements(_byteArry,pByteArry,0);
+        env->ReleaseByteArrayElements(_byteArry,pByteArry,0);
     }
     LOG("drawBitmap over");
     return iRet;
@@ -77,7 +90,10 @@ Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz, jobject
 JNIEXPORT jstring JNICALL
 Java_com_marvoto_fat_MeasureDepth_TestString(JNIEnv* env, jobject /* this */) {
     std::string hello = "Hello from C++";
-    measure();
+    //for(int i=0;i<50;i++) {
+       // measure();
+     //   LOG("i=%d",i);
+    //}
     return env->NewStringUTF(hello.c_str());
 }
 JNIEXPORT int JNICALL

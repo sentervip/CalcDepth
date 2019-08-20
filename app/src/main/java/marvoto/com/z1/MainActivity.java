@@ -24,6 +24,13 @@ import android.util.Log;
 import android.graphics.Bitmap;
 import com.marvoto.fat.MeasureDepth;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,7 +56,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             super.handleMessage(msg);
             if (msg.what==0){
                 //depth = MeasureDepth.DrawBitmap((Bitmap) msg.obj,data);
-                Log.i(tag,"depth="+depth);
+                //Log.i(tag,"depth="+depth);
                 imageView.setImageBitmap((Bitmap) msg.obj);
             }
         }
@@ -85,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             for ( int j = 0; j < 640; j++) {
                 data[i * 640 + j] = val;
             }
-
+        MeasureDepth.ParaSet(65,32);
 
         Thread mRefreshThread = new Thread() {
             @Override
@@ -103,13 +110,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     //for (int i = 0; i < temp.length; i++) {
                     //    temp[i] = Color.argb(255, 1, 2, 3);
                     //}
-                   // mBitmap  = Bitmap.createBitmap(temp,640,480,Bitmap.Config.ARGB_8888);
+                    // mBitmap  = Bitmap.createBitmap(temp,640,480,Bitmap.Config.ARGB_8888);
 
                     Message message = new Message();
                     message.obj=mBitmap;
                     message.what=0;
                     handler.sendMessage(message);
                     Log.i("tag", "run: ");
+                    g_status = 0;
                 }
             }}
         };
@@ -120,7 +128,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         switch (view.getId()) {
             case R.id.btnStart:
-               // g_status = 1;
+                g_status = 1;
                 Log.i(tag, "btnStart");
 //                byte[] data2 = new byte[640 * 480];
 //                byte val = 120;
@@ -129,7 +137,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 //                        data2[i * 640 + j] = val;
 //                    }
                 //MeasureDepth.SaveBmp(data2,640,480, "/sdcard/1/test.bmp");
-                MeasureDepth.TestString();
+                //MeasureDepth.TestString();
+                byte[] img = readFileToByteArray("/sdcard/1/1.txt");
+                Log.i(tag,"length:"+img.length);
+                int depth = MeasureDepth.DrawBitmap(mBitmap, img);
+                Log.i(tag,"length:"+img.length+",depth:"+depth);
                 break;
             case R.id.btnStop:
                 g_status = 0;
@@ -160,7 +172,55 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         return super.onOptionsItemSelected(item);
     }
+    private void writeAndFlush(String path, byte[] buffer) {
+        try {
+            FileOutputStream out = new FileOutputStream(path);//指定写到哪个路径中
+            FileChannel fileChannel = out.getChannel();
+            fileChannel.write(ByteBuffer.wrap(buffer)); //将字节流写入文件中
+            fileChannel.force(true);//强制刷新
+            fileChannel.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
+
+
+    private byte[] readFileToByteArray(String path) {
+        File file = new File(path);
+        if(!file.exists()) {
+            Log.e(tag,"File doesn't exist!");
+            return null;
+        }
+
+        try {
+            FileInputStream in = new FileInputStream(file);
+            long inSize = in.getChannel().size();//判断FileInputStream中是否有内容
+            if (inSize == 0) {
+                Log.d(tag,"The FileInputStream has no content!");
+                return null;
+            }
+
+            byte[] buffer = new byte[in.available()];//in.available() 表示要读取的文件中的数据长度
+            in.read(buffer);  //将文件中的数据读到buffer中
+            return buffer;
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            /*try {
+                //in.close();
+            } catch (IOException e) {
+                return null;
+            }*/
+            //或IoUtils.closeQuietly(in);
+        }
+    }
 
 
     //权限查询
