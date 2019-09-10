@@ -10,7 +10,7 @@
 extern "C"{
 #else
 #endif
-uint8_t  pOut[640*480*3];
+uint8_t  pOut[320*480*3];
 
 /*fill bitmap with rgba8888*/
 static void fill_bitmap(AndroidBitmapInfo*  info, void* pixels, uint8_t* pdata,int pdataStride)
@@ -42,10 +42,10 @@ Java_com_marvoto_fat_MeasureDepth_ParaSet(JNIEnv * env, jobject thiz, float Samp
     ParaSet(SampleRate,OscFre );
 }
 
-JNIEXPORT int JNICALL
+JNIEXPORT float JNICALL
 Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz,  jobject bitmap, jbyteArray _byteArry)
 {
-    int iRet = 0;
+    float iRet = 0;
     void *   pixels = NULL;
     AndroidBitmapInfo  info={0};
     jbyte * pByteArry = NULL;
@@ -74,7 +74,7 @@ Java_com_marvoto_fat_MeasureDepth_DrawBitmap(JNIEnv * env, jobject thiz,  jobjec
             goto fail;
         }
         fill_bitmap(&info, pixels, pOut,info.width);
-        iRet = ESUCCED;
+        //iRet = ESUCCED;
     }else{
         iRet = EFAILURE;
     }

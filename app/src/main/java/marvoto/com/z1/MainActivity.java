@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     ImageView imageView;
     Button btnStart,btnStop;
     private int depth;
-    private int IMG_WIDTH = 640;
+    private int IMG_WIDTH = 320;
     private int IMG_HEIGHT = 480;
     private int g_status = 0;
     private static final String tag = "MAVTJ";
@@ -86,13 +86,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // Example of a call to a native method
         //MeasureTest measureTest = new MeasureTest();
         //byte[] data= {(byte)0x71,(byte)0x72,(byte)0x73,(byte)0x74};
-        data = new int[640 * 480];
+        data = new int[320 * 480];
         int val = (0xff<<24)|(0x1<<16)|(0x2<<8)|0xff;
         for ( int i = 0; i < 480; i++)
-            for ( int j = 0; j < 640; j++) {
-                data[i * 640 + j] = val;
+            for ( int j = 0; j < 320; j++) {
+                data[i * 320 + j] = val;
             }
-        MeasureDepth.ParaSet(65,32);
+        MeasureDepth.ParaSet(3,32);
 
         Thread mRefreshThread = new Thread() {
             @Override
@@ -106,11 +106,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
                 if (g_status == 1) {
                    // MeasureDepth.DrawBitmap(mBitmap,data);
-                   // int[] temp = new int[640*480];
+                   // int[] temp = new int[320*480];
                     //for (int i = 0; i < temp.length; i++) {
                     //    temp[i] = Color.argb(255, 1, 2, 3);
                     //}
-                    // mBitmap  = Bitmap.createBitmap(temp,640,480,Bitmap.Config.ARGB_8888);
+                    // mBitmap  = Bitmap.createBitmap(temp,320,480,Bitmap.Config.ARGB_8888);
 
                     Message message = new Message();
                     message.obj=mBitmap;
@@ -130,18 +130,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btnStart:
                 g_status = 1;
                 Log.i(tag, "btnStart");
-//                byte[] data2 = new byte[640 * 480];
+//                byte[] data2 = new byte[320 * 480];
 //                byte val = 120;
 //                for ( int i = 0; i < 480; i++)
-//                    for ( int j = 0; j < 640; j++) {
-//                        data2[i * 640 + j] = val;
+//                    for ( int j = 0; j < 320; j++) {
+//                        data2[i * 320 + j] = val;
 //                    }
-                //MeasureDepth.SaveBmp(data2,640,480, "/sdcard/1/test.bmp");
+                //MeasureDepth.SaveBmp(data2,320,480, "/sdcard/1/test.bmp");
                 //MeasureDepth.TestString();
                 byte[] img = readFileToByteArray("/sdcard/1/1.txt");
-                Log.i(tag,"length:"+img.length);
-                int depth = MeasureDepth.DrawBitmap(mBitmap, img);
-                Log.i(tag,"length:"+img.length+",depth:"+depth);
+                //Log.i(tag,"length:"+img.length);
+                float depth = MeasureDepth.DrawBitmap(mBitmap, img);
+                Log.i(tag,"length:"+img.length+",depth:"+depth+" mm");
                 break;
             case R.id.btnStop:
                 g_status = 0;

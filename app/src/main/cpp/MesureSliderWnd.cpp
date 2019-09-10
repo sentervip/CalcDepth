@@ -99,9 +99,9 @@ float measure(int width,int height,uint8_t * pSrc ,uint8_t* pOut )
     }
     pt = g_StrCandicateTag.at(g_StrCandicateTag.size()-1).pt;
 	iRet = pt.y+WIN_H/2;
-    float depth = 0.0241*iRet; // 1540*32/1000000/2*iRet;
+    float depth = 1540/m_osc/1000000 *m_c0 * iRet*1000; // 1540/m_osc*sampeRate/1000000*iRet;
     iRet = (int) round(depth);
-    LOG("depth:%f,iRet:%d,pix:%0.1f", depth, iRet, pt.y+WIN_H);
+    LOG("depth:%f,iRet:%d,pix:%d,m_osc:%f,m_c0:%f", depth, iRet, pt.y,m_osc, m_c0);
 
 	//measure
     memset(dist,0,sizeof(dist));
@@ -113,6 +113,6 @@ float measure(int width,int height,uint8_t * pSrc ,uint8_t* pOut )
 
     imwrite("/sdcard/1/dest.jpg",DestRGB);
 	memcpy(pOut, DestRGB.data, width*height*3);
-    LOG("depth:%d mm", iRet);
+    //LOG("depth:%d mm", depth);
     return depth;
 }
