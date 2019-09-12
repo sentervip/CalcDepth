@@ -1,15 +1,19 @@
 #include "counter.hpp"
 #include "fstream"
-#include <stdio.h>
 #include <iostream>
 #include <string>
 #include <strstream>
 #include "math.h"
-#include <stdlib.h>
-#include <algorithm>
 #include "config_macro.h"
+#include <stdlib.h>
+#include<algorithm> 
+#include <vector>
 
-#define  FL_MIN_LENGTH   200
+//#define USED_LOCAL_PNG
+#define  IMG_WIDTH      160
+#define  IMG_HEIGH      480
+
+#define  FL_MIN_LENGTH   (IMG_WIDTH*0.6)
 #define  FL_MIN_AREA     400
 #define  DELTA           (6)  // contour error   1/6 *w
 #define  DELTA_POINT     (10)  // point error  1/10 *w
@@ -17,13 +21,23 @@
 //#define  MIN_X           200
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    200
-#define  MIN_CANDIDAT_AREA        1000
+#define  MIN_CANDIDAT_AREA        700
+#define  MIN_DISTANCE_CLUSTER     6
+#define  MIN_IMG_Y                16 //MIN_DISTANCE_CLUSTER
+#define  CALC_WIDTH_UP            1
+#define  CALC_WIDTH_DOWN          2
 
+static float m_c0,m_osc;
+vector<StrMonmentTag> g_MonmentTag;  //momentes struct
 vector<vector<Point> > g_Contours;
-vector<strAreaTag> g_AllArea,g_CandidateArea;
+vector<strAreaTag> g_AllArea,g_CandidateArea; //all area and area of lines
 vector<strAreaTag> * pAreaTag = &g_AllArea;
 
-
+void ParaSet(float SampleRate, float OscFre)
+{
+    m_c0 = SampleRate;
+    m_osc = OscFre;
+}
 string int2str(int index,int n1=0,int n2=0) {
     
     strstream ss;
@@ -48,7 +62,7 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     
     Point2f pt_tmp;
     int i =0,j=0;
-    for(vector<cv::Point2f>::iterator iter = mc.begin(); iter != mc.end(); ++iter){
+    for(vector<cv::Point2f>::iterator iter = mc.begin(); iter != mc.end(); ){
         if(i>0) //s1: repeate
             if( abs(iter->x - pt_tmp.x) < 2 || abs(iter->y - pt_tmp.y) < 2 ){
                 mc.erase(iter);
@@ -56,7 +70,9 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
                 putText(drawing,int2str(i),pt_tmp,CV_FONT_HERSHEY_DUPLEX,0.8f,CV_RGB(255,0,0));
                 valid[i] = 0;
                 j++;
-            }
+			}else{
+				iter++;
+			}
         i++;
         pt_tmp = *iter;
         
@@ -65,206 +81,383 @@ int sort_point(vector<Point2f> mc, int * valid, Mat &drawing)
     return (i - j+1);
 }
 void AreaGetMax(strAreaTag * area, int w, int h)
-{
-    int i =0;
-	area->x1 = w;
-	area->y1 = h;
-    while(i < g_Contours.at(area->index).size()){
-        area->x1 = _MIN(area->x1, g_Contours.at(area->index).at(i).x);
-        area->x2 = _MAX(area->x2, g_Contours.at(area->index).at(i).x);
-        area->y1 = _MIN(area->y1, g_Contours.at(area->index).at(i).y);
-        area->y2 = _MAX(area->y2, g_Contours.at(area->index).at(i).y);
-        i++;
-    }
-    
+{    
 }
-int GetCandicatArea(strAreaTag * area,int w,int h)
-{
-    int Cx = w>>1;
-    int Cy = h>>1;
-    int delta = w / DELTA;
-    
-    if(area->s > MIN_CANDIDAT_AREA && area->d > MIN_CANDIDAT_DIAMETER){
-        if( abs(area->moments.x - Cx) < delta && area->moments.y > MIN_Y ){
-            g_CandidateArea.push_back(*area);
-            return 1;
-        }
-    }
-    return -1;
-}
-int SortCmp(strAreaTag a1, strAreaTag a2)
-{
-	return a1.moments.y < a2.moments.y;
-}
-int CalcDist( vector<strAreaTag> * pData, int w, int h)
-{
-	int Cx = w>>1;
-	int Cy = h>>1;
-	int delta = 0;
-	unsigned long int sum= 0;
-	int i = 0,j = 0,pos =0,tmp=w;
 
-	LOG("");
-	//s1 find 最外围中心点，以mc(Xc,Yc).Xc为定点，取Y最小值
-	for( vector<Point>::iterator it = g_Contours.at(pData->at(0).index).begin(); 
-		 it != g_Contours.at(pData->at(0).index).end();it++){
-		if( abs( (*it).x - pData->at(0).moments.x) <  pData->at(0).d/8 ){	
-			
-			if((*it).y < tmp){
-				pos = i;
-			    tmp = (*it).y;
-				LOG("find mc[%d]:%d,%d\n",pos,(*it).x, (*it).y );
+int SortCmp(StrMonmentTag a1, StrMonmentTag a2)
+{
+	return a1.s > a2.s;
+}
+int SortCmpUp(int a1, int a2)
+{
+	return a1 < a2;
+}
+int SortArea(strAreaTag a1, strAreaTag a2)
+{
+	return g_MonmentTag.at(a1.mcIndex).s > g_MonmentTag.at(a2.mcIndex).s;
+}
+int SortDoc(strAreaTag a1, strAreaTag a2)
+{
+	return a1.doc > a2.doc;
+}
+int SortUp(strAreaTag a1, strAreaTag a2)
+{
+	return a1.boxUp > a2.boxUp;
+}
+
+int GetDistance(CvPoint pointO,CvPoint pointA )  
+{  
+	int distance;  
+	distance = powf((pointO.x - pointA.x),2) + powf((pointO.y - pointA.y),2);  
+	distance = sqrtf(distance);  
+	return distance;  
+}
+
+int PointClustering(vector<Vec2f> _pts, vector<int> & out)
+{
+	int i,capture;
+    vector<int>::iterator it;
+	vector<int> pts;
+
+	//get pts and sort
+	if(_pts.size() <=1){
+		printf("%s, size：%d\n",__FUNCTION__, _pts.size());
+		return 0;
+	}
+	for(i=0;i< _pts.size(); i++){
+		pts.push_back(cvRound(_pts[i][0]) );
+	}
+	std::sort(pts.begin(), pts.end(),SortCmpUp);
+
+	//clustering
+	while(pts.size()>0){
+		if(pts.size() == 1){
+		    out.push_back(pts.at(0));
+			break;
+		}else{
+			capture= pts.at(0);
+			out.push_back(capture);
+			pts.erase(pts.begin());
+			for(it=pts.begin();it != pts.end();){
+				if(abs(capture - *it) < MIN_DISTANCE_CLUSTER){
+					it = pts.erase(it);
+				}else{
+					it++;
+				}
 			}
 		}
-		i++;
-	}	  
 
-	//s2 计算最外围点横向<100 邻居点x的均值Xe，做深度采样点(Xe,Yc)
-	pData->at(0).AverCenterIndex = pos;
-	pData->at(0).captruePoint = g_Contours.at(pData->at(0).index).at(pos);
-	if(g_Contours.at(pData->at(0).index).size() > SUM_CALC_POINT *2 ){
-		delta = SUM_CALC_POINT;
-	}else{
-		delta = g_Contours.at(pData->at(0).index).size() >> 1;
-	}
 
-	for( i=pos-delta,j=0; i< pos+delta; i++){
-		if(i>=0 &&  i< g_Contours.at(pData->at(0).index).size() ) // [0,size] ?
-			if(g_Contours.at(pData->at(0).index).at(i).x > pData->at(0).x1  &&
-			   g_Contours.at(pData->at(0).index).at(i).x < pData->at(0).x2  &&
-			   g_Contours.at(pData->at(0).index).at(i).y < pData->at(0).y2  &&
-			   g_Contours.at(pData->at(0).index).at(i).y > pData->at(0).y1  ){
-				sum += g_Contours.at(pData->at(0).index).at(i).x;
-				pData->at(0).AverPoint[j].x = g_Contours.at(pData->at(0).index).at(i).x;
-				pData->at(0).AverPoint[j].y = g_Contours.at(pData->at(0).index).at(i).y;
-				j++;
-			}
-	}
-	if(j)  {
-		pData->at(0).AverCount = j;
-		pData->at(0).AverValue = sum /j;
 	}
 	return 0;
 }
-
-int measure(void)
+int LineMatch2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
 {
-    int iRet = 0;
+    vector<StrMonmentTag>::iterator it;
+	int index = 0;
+	int i=0;
+	int Min = 500;
+
+	for(it=MomentTag.begin();it != MomentTag.end(); it++){
+		if(abs(it->mc.y - lineY) < Min 
+			&& it->s > FL_MIN_AREA  
+			&& (it->d > FL_MIN_LENGTH) ){
+			Min = it->mc.y;
+			index = i;
+		}
+		i++;
+	}
+	return index;
+}
+int CalcWidth(cv::Mat &bin,Point2i pt, int len, int UpOrDown)
+{
+	int aver =0;
+	int sum =0;
+	int width = 0;
+
+		
+		if(UpOrDown == CALC_WIDTH_UP){
+			while(--pt.y > MIN_IMG_Y){
+					sum = 0;
+					for(int i=-len/2;i<len/2; i++){
+						sum += bin.at<uchar>(pt.y,IMG_WIDTH/2+i);
+						//sum += bin.at<uchar>(1,IMG_WIDTH/2+i);
+					}
+				aver = sum/len;
+				if( aver < 0.3 *0xff){ //有效黑色区域计算			
+					width++;
+				}else if(width == 0){ //在本白线内部
+					LOGE("waring, %s,innerLine %d",__FUNCTION__, pt.y);
+					continue;
+				}else if( aver > 0.7 *0xff){
+					break;
+				}
+			}
+	    }else{
+			while(++pt.y < IMG_HEIGH){
+				sum = 0;
+				for(int i=-len/2;i<len/2; i++){
+					sum += bin.at<uchar>(pt.y,IMG_WIDTH/2+i);
+					//sum += bin.at<uchar>(1,IMG_WIDTH/2+i);
+				}
+				aver = sum/len;
+				if( aver < 0.3 *0xff){ //有效黑色区域计算			
+					width++;
+				}else if(width == 0){ //在本白线内部
+					LOGE("waring, %s,innerLine %d",__FUNCTION__, pt.y);
+					continue;
+				}else if( aver > 0.7 *0xff){
+					break;
+				}
+			}
+	}
+	return width;
+}
+float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
+{
+	char dist[40];
+    int i,j,iRet = 0;
+	float depth;
+	Point pt1, pt2;
     int mc_valid[300] = {1};
     RNG g_rng(12345);
     Mat g_cannyMat_output;
     vector<Vec4i> g_vHierarchy;
-    Mat img = imread("/sdcard/1/a6.jpg");
-    //imshow("OriImg", img);
-    if(img.cols == 0){
-    	LOGE("jpg can not read");
-    	//return -1;
+	vector<int> g_lineY;
+	Mat DestRGB;
+
+	g_MonmentTag.clear();
+	g_MonmentTag.clear();  //momentes struct
+	g_Contours.clear();
+	g_AllArea.clear();
+	g_CandidateArea.clear();
+#ifdef USED_LOCAL_PNG
+    Mat m_origin = imread("/sdcard/1/1.png", 1);
+    if(m_origin.data == NULL ){
+        LOGE("file not find,exit");
+        return -1;
     }
-    GaussianBlur(img, img, Size(5, 5), 0.5); LOGL();
     
-    int width = img.cols;
-    int height = img.rows;
-    Mat gray = Mat::zeros(img.size(),CV_8UC1);
-    for (int i = 0; i < height; i++)
+    //s1 preprocess
+    if(m_origin.data == NULL || m_origin.rows <= 0 || m_origin.cols <= 0){
+        LOGE("input data invalid,exit");
+        return -1;
+    }
+    LOG("w=%d, h=%d",w,h);
+    GaussianBlur(m_origin, m_origin, Size(15, 15), 1.0);   
+    int width = m_origin.cols;
+    int height = m_origin.rows;
+    Mat m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
+    for ( i = 0; i < height; i++)
     {
-        for (int j = 0; j < width; j++)
+        for ( j = 0; j < width; j++)
         {
-            int pix = img.at<Vec3b>(i, j)[0] + img.at<Vec3b>(i, j)[2] - img.at<Vec3b>(i, j)[1];
+            int pix = m_origin.at<Vec3b>(i, j)[0] + m_origin.at<Vec3b>(i, j)[2] - m_origin.at<Vec3b>(i, j)[1];
             if (pix > 255)
                 pix = 255;
             if (pix < 0)
                 pix = 0;
-            gray.at<uchar>(i, j) = (uchar)pix;
+            m_gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
-    LOGL();
-    imwrite("/sdcard/1/1gray.jpg",gray);LOGL(); LOG("w=%d,h=%d",width, height);
-    Mat bw;
+#else
+    Mat m_gray = Mat(h,w,CV_8UC1,pSrc);
+    if(m_gray.data == NULL || w <= 0 || h <= 0){
+        LOGE("input data invalid,exit");
+        return -1;
+    }
+    LOG("w=%d, h=%d",w,h);
+    cv::GaussianBlur(m_gray,m_gray,cv::Size(15,15),1,1);
+#endif
+	imwrite("/sdcard/1/0gray.jpg", m_gray);
+
+    //morphology
+	int g_nElementShape = MORPH_RECT;
+	Mat _m_gray;
+	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
+	morphologyEx(m_gray, _m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",_m_gray);
+	element = getStructuringElement(g_nElementShape, Size(7, 7) );
+	morphologyEx(_m_gray, _m_gray, CV_MOP_DILATE, element);
+    imwrite("/sdcard/1/2dilate.jpg",_m_gray);
+    Mat m_bin;
     
-    //s1 canny
-    threshold(gray, bw, 0, 255, CV_THRESH_OTSU);  LOGL();
-    imwrite("/sdcard/1/2bin.jpg", bw);
-    Canny( bw, g_cannyMat_output, 20, 255, 3 );  LOGL();
+    //Bin
+    threshold(_m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
+    imwrite("/sdcard/1/3bin.jpg", m_bin);
+	
+	//lines
+	Mat m_line(m_bin.size(),CV_8UC1);
+
+	#if 1
+	vector<Vec2f> lines; 
+	HoughLines(m_bin, lines, 1, CV_PI/2, 100);
+	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
+	{
+		//float rho = lines[i][0], theta = lines[i][1];
+		float rho = it->val[0];
+		float theta = it->val[1];;
+		double a = cos(theta), b = sin(theta);
+		double x0 = a*rho, y0 = b*rho;
+		pt1.x = cvRound(x0 + w*(-b));
+		pt1.y = cvRound(y0 + w*(a));
+		pt2.x = cvRound(x0 - w*(-b));
+		pt2.y = cvRound(y0 - w*(a));
+		if(y0 < MIN_IMG_Y){
+			it = lines.erase(it);
+		}else{
+			line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
+			it++; 
+		}
+	}
+	if(lines.size() <1){
+		printf("invalid img\n");
+		return  EINVALID_ARG;
+	}else if(lines.size() == 1){
+		//measure and show		
+		cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+		memset(dist,0,sizeof(dist));
+		//depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
+        depth = 1540/m_osc/1000000 *m_c0 * lines.at(0).val[0]*1000; // 1540/m_osc*sampeRate/1000000*iRet;
+		sprintf(dist," %0.1f mm", depth);
+		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
+		imwrite( "Dest.jpg", DestRGB );
+		memcpy(pOut, DestRGB.data, w*h*3);
+		return depth;
+	}
+
+	#else
+        vector<Vec4i> lines;
+        HoughLinesP( m_bin, lines, 1, CV_PI/2, 150, 150 );
+        for( size_t i = 0; i < lines.size(); i++ )
+        {
+            line( m_line, Point(lines[i][0], lines[i][1]),
+                Point(lines[i][2], lines[i][3]), Scalar(0,0,255), 0.3, CV_AA );
+        }
+    #endif
+	PointClustering(lines,g_lineY);
+	imwrite("/sdcard/1/4Line.jpg", m_line);
     
     //s2 get contour
-    findContours(bw, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);LOGL();
-    Mat markers = Mat::zeros(bw.size(), CV_32SC1);
+	Mat bMat = m_bin.clone();
+	Canny( bMat, g_cannyMat_output, 20, 255);
+    findContours(bMat, g_Contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+    Mat markers = Mat::zeros(bMat.size(), CV_32SC1);
     
-    for (size_t i = 0; i < g_Contours.size(); i++)
+    for ( i = 0; i < g_Contours.size(); i++)
         drawContours(markers, g_Contours, static_cast<int>(i), Scalar::all(static_cast<int>(i)+1), -1);
-    LOGL();
+    
     circle(markers, Point(5, 5), 3, CV_RGB(255, 255, 255), -1);
-    imwrite("/sdcard/1/3contours.jpg", markers);
+    imwrite("/sdcard/1/5contours.jpg", markers);
     
     //s3 get center monments
     vector<Moments> mu(g_Contours.size() );
     for(unsigned int i = 0; i < g_Contours.size(); i++ )
-    { mu[i] = moments( g_Contours[i], false ); }
+    { 
+		mu[i] = moments( g_Contours[i], false ); 
+	}
     
     //  calc mc
     vector<Point2f> mc( g_Contours.size() );
     for( unsigned int i = 0; i < g_Contours.size(); i++ )
     {
         mc[i] = Point2i( static_cast<float>(mu[i].m10/mu[i].m00), static_cast<float>(mu[i].m01/mu[i].m00 )) ;
-        //g_AllArea.at(i)->moments = &mc;
     }
     
-    
-    // s4 drawing contour and calc args of mc
+    // drawing contour and calc args of mc
     Mat drawing = Mat::zeros( g_cannyMat_output.size(), CV_8UC3 );
     Scalar color = CV_RGB(0,255,0);
-    int sum = (int)g_Contours.size();
-    //int j =0;
-    strAreaTag  area;
-
+    //strAreaTag  area;
+	StrMonmentTag mcTag;
+	int d,s;
+	g_MonmentTag.clear();
     for( unsigned int i = 0; i< g_Contours.size(); i++ )
-    {
-		memset(&area,0,sizeof(strAreaTag));
-        area.d =(long int) arcLength( g_Contours[i], true );
-        area.s =(int) contourArea(g_Contours[i]);
-		area.moments = mc.at(i);
-		area.index = i;		
-		
-		g_AllArea.push_back(area);
-        if(area.d < FL_MIN_LENGTH || area.s < FL_MIN_AREA){
+    {	
+        d =(long int) arcLength( g_Contours[i], true );
+        s =(int) contourArea(g_Contours[i]);		
+        if(d < FL_MIN_LENGTH || s < FL_MIN_AREA){
             continue;
-        }		
-		LOG("[%d], s:%d ,d:%d \n", i, (int)area.s, (int)area.d); LOGL();
-		AreaGetMax(&area, drawing.cols, drawing.rows);  LOGL();
-        iRet = GetCandicatArea(&area, drawing.cols,drawing.rows);  LOGL();
-        if(iRet > 0){
-            color = Scalar(0, 0xff, 0xff);//yellow
-        }else{
-            color = Scalar(0, 255,0);
-        }
-        drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     LOGL();
-        circle( drawing, mc[i], 3, Scalar(0,255,0), -1, 0.1f, 0 );
-        putText(drawing,int2str(i,g_AllArea.at(i).s,g_AllArea.at(i).d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.5f,Scalar(255,255,255));
-        putText(drawing,int2str(area.moments.x, area.moments.y),Point2i(mc[i].x,mc[i].y-20),CV_FONT_HERSHEY_DUPLEX,  0.5f,Scalar(100,100,0));
-        
-    }
-	
-	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortCmp);    LOGL();
-	CalcDist(&g_CandidateArea,drawing.cols,drawing.rows);       LOGL();
-	const Point * pts[1] = {g_CandidateArea.at(0).AverPoint};
-	cv::fillPoly(drawing,pts, &g_CandidateArea.at(0).AverCount,1,cv::Scalar(0xff,0xff,0)); 
-	char dist[40];
-    //itoa(g_CandidateArea.at(0).captruePoint.y,  dist,   10);
-	//strcat(dist," mm");
-    snprintf(dist,40,"%d mm",g_CandidateArea.at(0).captruePoint.y);
-	putText(drawing,dist,Point2f(g_CandidateArea.at(0).captruePoint.x,g_CandidateArea.at(0).captruePoint.y-50),
-		                 CV_FONT_HERSHEY_DUPLEX,0.7f,Scalar(0,0,255));
-	cv::arrowedLine(drawing,Point(g_CandidateArea.at(0).captruePoint.x,0),g_CandidateArea.at(0).captruePoint,Scalar(0,0,255),2);
+        }	
+		mcTag.d = d;
+        mcTag.s = s;
+		mcTag.mc = mc.at(i);
+		mcTag.contourIndex = i;		
+		LOGE("[%d],mc.x=%f,mc.y=%f, s:%d ,d:%d \n", i,mc[i].x,mc[i].y, (int)mcTag.s, (int)mcTag.d);
+		drawContours( drawing, g_Contours, i, color, 2, 8, g_vHierarchy, 0, Point() );     
+        circle( drawing, mc[i], 3, Scalar(0,0,255), -1, 0.1f, 0 );
+        putText(drawing,int2str(i,mcTag.s,mcTag.d),mc[i],CV_FONT_HERSHEY_DUPLEX,0.3f,Scalar(255,255,255));
+		putText(drawing,int2str(mc[i].x, mc[i].y),Point2i(mc[i].x-40,mc[i].y+10),CV_FONT_HERSHEY_DUPLEX,  0.3f,Scalar(0,0,255));
+		g_MonmentTag.push_back(mcTag);
+	}
+	imwrite("/sdcard/1/6mc.jpg", drawing);
+	if(g_MonmentTag.size() >=2 ){
+	    std::sort(g_MonmentTag.begin(),g_MonmentTag.end(),SortCmp);
+	}else if(g_MonmentTag.size() <=1){
+	    LOGE("please touch up");
+	    return ECLOSED;
+	}else;
+    LOGE("tour over");
 
-    cv::putText(drawing,"Sum:",Point2f(0,50),CV_FONT_HERSHEY_DUPLEX,1.0f,color);
-    cv::putText(drawing,int2str(g_CandidateArea.size()),Point2f(80,50),CV_FONT_HERSHEY_SIMPLEX,0.8f,Scalar(255,255,255));
+	//s4 match to lines and push candidate
+	strAreaTag area;
+	i = 0;
+	for( vector<int>::iterator it = g_lineY.begin(); it !=g_lineY.end(); i++){
+	   if(g_lineY.at(i) < MIN_IMG_Y){
+		   g_lineY.erase(it);
+		   continue;
+	   }else{
+		   it++;
+	   }
+	   area.lineIndex = i;
+       area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
+	   //area.mc = g_MonmentTag.at(area.mcIndex);
+	   area.s = g_MonmentTag.at(area.mcIndex).s;
+	   area.captruePoint = Point2i(IMG_WIDTH/2, g_lineY.at(i));	   
+	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
+	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
+	   g_CandidateArea.push_back(area);
+	}
+    LOGE("push candidate over");
 
-	cv::rectangle(drawing,Point(width-200,0),Point(width-170,20),Scalar(0, 0xff, 0xff),2);
-	cv::putText(drawing,"Candidate area",Point2f(width-160,20),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0xff, 0xff));
+	//s5 get score and doc
+	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);  LOGL();
+	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);        LOGL();
+	for( size_t i = 0; i < g_lineY.size(); i++){
+		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s *100 /g_CandidateArea.at(0).s; LOGL();
+		j = g_lineY.size();        LOGE("size=%d",j);                                       LOGL();
+		while(--j >= 0){
+			if(g_CandidateArea.at(i).lineIndex == _CandidateArea.at(j).lineIndex){
+				g_CandidateArea.at(i).bws = _CandidateArea.at(j).boxUp*100/_CandidateArea.at(0).boxUp;
+				break;
+			}
+		}
+        LOGL();
+		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws;
+	}
+	int DestLine = 0;
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
+	if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
+		if(g_CandidateArea.at(0).wws > g_CandidateArea.at(1).wws){
+			DestLine = 0;
+		}else{
+			DestLine = 1;
+		}
+	}
+    LOGE("doc over");
 
-	cv::rectangle(drawing,Point(width-200,25),Point(width-170,40),Scalar(0, 0, 0xff),2);
-	cv::putText(drawing,"Dest area",Point2f(width-160,40),CV_FONT_HERSHEY_DUPLEX,0.6f,Scalar(0, 0, 0xff));   LOGL();
-    imwrite( "/sdcard/1/measure.jpg", drawing );   LOGL();
-	//waitKey();
-    return 0;
+    //measure and show
+    cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
+    memset(dist,0,sizeof(dist));
+    depth = 1540/m_osc/1000000 *m_c0 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
+    //iRet = (int) round(depth);
+    LOG("depth:%f,pix:%d,m_osc:%f,m_c0:%f", depth,  g_CandidateArea.at(DestLine).captruePoint.y,m_osc, m_c0);
+    sprintf(dist," %0.1f mm", depth);
+    LOG("dist:%s", dist);
+	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
+	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
+	imwrite( "/sdcard/1/7Dest.jpg", DestRGB );
+    memcpy(pOut, DestRGB.data, w*h*3);
+	_CandidateArea.clear();
+    return depth;
 }
