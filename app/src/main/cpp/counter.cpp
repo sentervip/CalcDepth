@@ -10,7 +10,7 @@
 #include <vector>
 
 //#define USED_LOCAL_PNG
-#define  IMG_WIDTH      160
+#define  IMG_WIDTH      640
 #define  IMG_HEIGH      480
 
 #define  FL_MIN_LENGTH   (IMG_WIDTH*0.6)
@@ -22,8 +22,8 @@
 #define  MIN_Y           300
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
-#define  MIN_DISTANCE_CLUSTER     6
-#define  MIN_IMG_Y                16 //MIN_DISTANCE_CLUSTER
+#define  MIN_DISTANCE_CLUSTER     25
+#define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
 
@@ -143,6 +143,7 @@ int PointClustering(vector<Vec2f> _pts, vector<int> & out)
 					it = pts.erase(it);
 				}else{
 					it++;
+					break;
 				}
 			}
 		}
@@ -157,12 +158,14 @@ int LineMatch2Moment(vector<StrMonmentTag> MomentTag,  int lineY)
 	int index = 0;
 	int i=0;
 	int Min = 500;
+	int iAbs;
 
 	for(it=MomentTag.begin();it != MomentTag.end(); it++){
-		if(abs(it->mc.y - lineY) < Min 
+		iAbs = abs(it->mc.y - lineY);
+		if( iAbs < Min 
 			&& it->s > FL_MIN_AREA  
 			&& (it->d > FL_MIN_LENGTH) ){
-			Min = it->mc.y;
+			Min = iAbs;
 			index = i;
 		}
 		i++;
@@ -225,6 +228,7 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
     vector<Vec4i> g_vHierarchy;
 	vector<int> g_lineY;
 	Mat DestRGB;
+	Mat m_gray;
 
 	g_MonmentTag.clear();
 	g_MonmentTag.clear();  //momentes struct
@@ -243,11 +247,10 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
         LOGE("input data invalid,exit");
         return -1;
     }
-    LOG("w=%d, h=%d",w,h);
-    GaussianBlur(m_origin, m_origin, Size(15, 15), 1.0);   
+    LOG("w=%d, h=%d",w,h); 
     int width = m_origin.cols;
     int height = m_origin.rows;
-    Mat m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
+    Mat _m_gray = Mat::zeros(m_origin.size(),CV_8UC1);
     for ( i = 0; i < height; i++)
     {
         for ( j = 0; j < width; j++)
@@ -257,32 +260,31 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
                 pix = 255;
             if (pix < 0)
                 pix = 0;
-            m_gray.at<uchar>(i, j) = (uchar)pix;
+            _m_gray.at<uchar>(i, j) = (uchar)pix;
         }
     }
 #else
-    Mat m_gray = Mat(h,w,CV_8UC1,pSrc);
-    if(m_gray.data == NULL || w <= 0 || h <= 0){
+    Mat _m_gray = Mat(h,w,CV_8UC1,pSrc);
+    if(_m_gray.data == NULL || w <= 0 || h <= 0){
         LOGE("input data invalid,exit");
         return -1;
     }
     LOG("w=%d, h=%d",w,h);
-    cv::GaussianBlur(m_gray,m_gray,cv::Size(15,15),1,1);
 #endif
+    GaussianBlur(_m_gray, m_gray, Size(15, 15), 1.0);  
 	imwrite("/sdcard/1/0gray.jpg", m_gray);
 
     //morphology
 	int g_nElementShape = MORPH_RECT;
-	Mat _m_gray;
 	Mat element = getStructuringElement(g_nElementShape, Size(5, 5) );
-	morphologyEx(m_gray, _m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",_m_gray);
+	morphologyEx(m_gray, m_gray, CV_MOP_ERODE, element);  imwrite("1erode.jpg",m_gray);
 	element = getStructuringElement(g_nElementShape, Size(7, 7) );
-	morphologyEx(_m_gray, _m_gray, CV_MOP_DILATE, element);
-    imwrite("/sdcard/1/2dilate.jpg",_m_gray);
+	morphologyEx(m_gray, m_gray, CV_MOP_DILATE, element);
+    imwrite("/sdcard/1/2dilate.jpg",m_gray);
     Mat m_bin;
     
     //Bin
-    threshold(_m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
+    threshold(m_gray, m_bin, 20, 255, CV_THRESH_OTSU);
     imwrite("/sdcard/1/3bin.jpg", m_bin);
 	
 	//lines
@@ -294,18 +296,18 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
 		//float rho = lines[i][0], theta = lines[i][1];
-		float rho = it->val[0];
-		float theta = it->val[1];;
-		double a = cos(theta), b = sin(theta);
-		double x0 = a*rho, y0 = b*rho;
-		pt1.x = cvRound(x0 + w*(-b));
-		pt1.y = cvRound(y0 + w*(a));
-		pt2.x = cvRound(x0 - w*(-b));
-		pt2.y = cvRound(y0 - w*(a));
-		if(y0 < MIN_IMG_Y){
+//		float rho = it->val[0];
+//		float theta = it->val[1];;
+//		double a = cos(theta), b = sin(theta);
+//		double x0 = a*rho, y0 = b*rho;
+//		pt1.x = cvRound(x0 + w*(-b));
+//		pt1.y = cvRound(y0 + w*(a));
+//		pt2.x = cvRound(x0 - w*(-b));
+//		pt2.y = cvRound(y0 - w*(a));
+		if(it->val[0] < MIN_IMG_Y){
 			it = lines.erase(it);
 		}else{
-			line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
+			//line( m_line, pt1, pt2, Scalar(0,0,255), 1, CV_AA);
 			it++; 
 		}
 	}
@@ -314,14 +316,14 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 		return  EINVALID_ARG;
 	}else if(lines.size() == 1){
 		//measure and show		
-		cv::cvtColor(m_gray,DestRGB,COLOR_GRAY2RGB);
+		cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
 		memset(dist,0,sizeof(dist));
 		//depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
         depth = 1540/m_osc/1000000 *m_c0 * lines.at(0).val[0]*1000; // 1540/m_osc*sampeRate/1000000*iRet;
 		sprintf(dist," %0.1f mm", depth);
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
-		imwrite( "Dest.jpg", DestRGB );
+		imwrite( "/sdcard/1/7Dest.jpg", DestRGB );
 		memcpy(pOut, DestRGB.data, w*h*3);
 		return depth;
 	}
@@ -336,6 +338,10 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
         }
     #endif
 	PointClustering(lines,g_lineY);
+    for(std::vector<int>::iterator it=g_lineY.begin(); it != g_lineY.end();){
+		line( m_line, Point(0,*it), Point(w, *it), Scalar(0,0,255), 1, CV_AA);
+		it++;
+    }
 	imwrite("/sdcard/1/4Line.jpg", m_line);
     
     //s2 get contour
@@ -401,12 +407,11 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 	//s4 match to lines and push candidate
 	strAreaTag area;
 	i = 0;
+	std::sort(g_lineY.begin(),g_lineY.end(), SortCmpUp);
 	for( vector<int>::iterator it = g_lineY.begin(); it !=g_lineY.end(); i++){
 	   if(g_lineY.at(i) < MIN_IMG_Y){
-		   g_lineY.erase(it);
+		   it =g_lineY.erase(it);
 		   continue;
-	   }else{
-		   it++;
 	   }
 	   area.lineIndex = i;
        area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
@@ -416,10 +421,13 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
 	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
 	   g_CandidateArea.push_back(area);
-	}
-    LOGE("push candidate over");
 
-	//s5 get score and doc
+	   // g_MonmentTag.size < g_lineY.size ? break
+	   if( i>= g_MonmentTag.size()){
+		   break;
+	   }
+	    it++;
+	}
 	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
 	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);  LOGL();
 	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);        LOGL();
@@ -452,7 +460,7 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
     depth = 1540/m_osc/1000000 *m_c0 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
     //iRet = (int) round(depth);
     LOG("depth:%f,pix:%d,m_osc:%f,m_c0:%f", depth,  g_CandidateArea.at(DestLine).captruePoint.y,m_osc, m_c0);
-    sprintf(dist," %0.1f mm", depth);
+    sprintf(dist," %0.0f mm", depth);
     LOG("dist:%s", dist);
 	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
