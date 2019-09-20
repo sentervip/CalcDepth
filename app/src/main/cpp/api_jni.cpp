@@ -10,7 +10,7 @@
 extern "C"{
 #else
 #endif
-uint8_t  pOut[640*480*3];
+uint8_t  pOut[320*480*3];
 
 /*fill bitmap with rgba8888*/
 static void fill_bitmap(AndroidBitmapInfo*  info, void* pixels, uint8_t* pdata,int pdataStride)

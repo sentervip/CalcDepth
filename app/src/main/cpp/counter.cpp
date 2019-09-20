@@ -10,7 +10,7 @@
 #include <vector>
 
 //#define USED_LOCAL_PNG
-#define  IMG_WIDTH      640
+#define  IMG_WIDTH      320
 #define  IMG_HEIGH      480
 
 #define  FL_MIN_LENGTH   (IMG_WIDTH*0.6)
@@ -18,12 +18,11 @@
 #define  DELTA           (6)  // contour error   1/6 *w
 #define  DELTA_POINT     (10)  // point error  1/10 *w
 #define  SUM_CALC_POINT   (100)
-//#define  MIN_X           200
-#define  MIN_Y           300
+
 #define  MIN_CANDIDAT_DIAMETER    200
 #define  MIN_CANDIDAT_AREA        700
-#define  MIN_DISTANCE_CLUSTER     25
-#define  MIN_IMG_Y                20 //MIN_DISTANCE_CLUSTER
+#define  MIN_DISTANCE_CLUSTER     20
+#define  MIN_IMG_Y                16 //MIN_DISTANCE_CLUSTER
 #define  CALC_WIDTH_UP            1
 #define  CALC_WIDTH_DOWN          2
 
@@ -292,7 +291,7 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 
 	#if 1
 	vector<Vec2f> lines; 
-	HoughLines(m_bin, lines, 1, CV_PI/2, 100);
+	HoughLines(m_bin, lines, 1, CV_PI/2, IMG_WIDTH-20);
 	for(vector<Vec2f>::iterator it = lines.begin(); it != lines.end(); )
 	{
 		//float rho = lines[i][0], theta = lines[i][1];
@@ -320,7 +319,7 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 		memset(dist,0,sizeof(dist));
 		//depth = lines.at(0).val[0]; // 1540/m_osc*sampeRate/1000000*iRet;
         depth = 1540/m_osc/1000000 *m_c0 * lines.at(0).val[0]*1000; // 1540/m_osc*sampeRate/1000000*iRet;
-		sprintf(dist," %0.1f mm", depth);
+		sprintf(dist," %d mm", cvRound(depth));
 		putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,lines.at(0).val[0]/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 		cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),Point2i(w/2,lines.at(0).val[0]),Scalar(0,0,255),1);
 		imwrite( "/sdcard/1/7Dest.jpg", DestRGB );
@@ -402,7 +401,7 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 	    LOGE("please touch up");
 	    return ECLOSED;
 	}else;
-    LOGE("tour over");
+    
 
 	//s4 match to lines and push candidate
 	strAreaTag area;
@@ -413,6 +412,10 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 		   it =g_lineY.erase(it);
 		   continue;
 	   }
+	   // g_MonmentTag.size < g_lineY.size ? break
+	   if( i>= g_MonmentTag.size()){
+		   break;
+	   }
 	   area.lineIndex = i;
        area.mcIndex = LineMatch2Moment(g_MonmentTag, g_lineY.at(i));
 	   //area.mc = g_MonmentTag.at(area.mcIndex);
@@ -421,46 +424,40 @@ float measure(int w,int h,uint8_t * pSrc ,uint8_t* pOut )
 	   area.boxUp = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_UP);
 	   //area.boxDown = CalcWidth(m_bin,area.captruePoint,10,CALC_WIDTH_DOWN);
 	   g_CandidateArea.push_back(area);
-
-	   // g_MonmentTag.size < g_lineY.size ? break
-	   if( i>= g_MonmentTag.size()){
-		   break;
-	   }
-	    it++;
+	   it++;
 	}
 	vector<strAreaTag> _CandidateArea(g_CandidateArea);      
-	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);  LOGL();
-	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);        LOGL();
-	for( size_t i = 0; i < g_lineY.size(); i++){
-		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s *100 /g_CandidateArea.at(0).s; LOGL();
-		j = g_lineY.size();        LOGE("size=%d",j);                                       LOGL();
+	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortArea);
+	std::sort(_CandidateArea.begin(),_CandidateArea.end(),SortUp);
+	for( i = 0; i < g_CandidateArea.size(); i++){
+		g_CandidateArea.at(i).wws = g_CandidateArea.at(i).s * 100/g_CandidateArea.at(0).s ; 
+		j = g_CandidateArea.size();                                          
 		while(--j >= 0){
 			if(g_CandidateArea.at(i).lineIndex == _CandidateArea.at(j).lineIndex){
 				g_CandidateArea.at(i).bws = _CandidateArea.at(j).boxUp*100/_CandidateArea.at(0).boxUp;
 				break;
 			}
 		}
-        LOGL();
 		g_CandidateArea.at(i).doc = g_CandidateArea.at(i).bws + g_CandidateArea.at(i).wws;
 	}
 	int DestLine = 0;
-	std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
-	if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
-		if(g_CandidateArea.at(0).wws > g_CandidateArea.at(1).wws){
-			DestLine = 0;
-		}else{
-			DestLine = 1;
+	if(g_CandidateArea.size() >=2 ){
+		std::sort(g_CandidateArea.begin(),g_CandidateArea.end(),SortDoc);
+		if(g_CandidateArea.at(0).doc == g_CandidateArea.at(1).doc){
+			if(g_CandidateArea.at(0).wws >= g_CandidateArea.at(1).wws){
+				DestLine = 0;
+			}else{
+				DestLine = 1;
+			}
 		}
 	}
-    LOGE("doc over");
-
     //measure and show
     cv::cvtColor(_m_gray,DestRGB,COLOR_GRAY2RGB);
     memset(dist,0,sizeof(dist));
     depth = 1540/m_osc/1000000 *m_c0 * g_CandidateArea.at(DestLine).captruePoint.y*1000; // 1540/m_osc*sampeRate/1000000*iRet;
     //iRet = (int) round(depth);
     LOG("depth:%f,pix:%d,m_osc:%f,m_c0:%f", depth,  g_CandidateArea.at(DestLine).captruePoint.y,m_osc, m_c0);
-    sprintf(dist," %0.0f mm", depth);
+    sprintf(dist," %d mm", cvRound(depth));
     LOG("dist:%s", dist);
 	putText(DestRGB,dist,Point2i(IMG_WIDTH/2+5,g_CandidateArea.at(DestLine).captruePoint.y/2),CV_FONT_HERSHEY_DUPLEX,0.4f,Scalar(0,0,255));
 	cv::arrowedLine(DestRGB,Point(IMG_WIDTH/2,0),g_CandidateArea.at(DestLine).captruePoint,Scalar(0,0,255),1);
